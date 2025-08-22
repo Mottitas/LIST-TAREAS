@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ToDo List - Vue.js</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body class="bg-gray-400 min-h-screen flex items-center justify-center p-4">
+  <div id="app" class="w-full max-w-md bg-white shadow-lg rounded-2xl p-6 relative">
+    <!-- Título -->
+    <h1 class="text-2xl font-bold text-center mb-6">  TAREAS</h1>
+
+    <!-- Input para agregar nueva tarea -->
+    <div class="flex mb-4">
+      <input v-model="nuevaTarea" @keyup.enter="abrirSelectorColor"
+        type="text" placeholder="Escribe una tarea..."
+        class="flex-1 border rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button @click="abrirSelectorColor"
+        class="bg-blue-500 text-white px-4 rounded-r-lg hover:bg-blue-600">Agregar</button>
+    </div>
+
+    <!-- Filtros -->
+    <div class="flex justify-between items-center mb-4">
+      <div class="space-x-2">
+        <button @click="filtro = 'todas'" :class="filtro === 'todas' ? activo : inactivo">Todas</button>
+        <button @click="filtro = 'activas'" :class="filtro === 'activas' ? activo : inactivo">Activas</button>
+        <button @click="filtro = 'completadas'" :class="filtro === 'completadas' ? activo : inactivo">Completadas</button>
+      </div>
+      <span class="text-sm text-gray-500">{{ tareasActivas }} pendientes</span>
+    </div>
+
+    <!-- Lista de tareas -->
+    <ul class="space-y-2 min-h-[100px]">
+      <li v-for="(tarea, index) in tareasFiltradas" :key="index"
+        class="flex items-center justify-between p-2 rounded-lg"
+        :style="{ backgroundColor: tarea.color, opacity: tarea.completada ? 0.5 : 1 }">
+        <div class="flex items-center space-x-2 w-full">
+          <!-- Checkbox -->
+          <input type="checkbox" v-model="tarea.completada" class="cursor-pointer">
+          <!-- Texto editable -->
+          <span v-if="!tarea.editando" @dblclick="editarTarea(tarea)"
+            :class="tarea.completada ? 'line-through text-gray-200 flex-1' : 'flex-1 text-white font-medium'">
+            {{ tarea.texto }}
+          </span>
+          <input v-else type="text" v-model="tarea.texto" @keyup.enter="guardarEdicion(tarea)" @blur="guardarEdicion(tarea)"
+            class="flex-1 border rounded p-1">
+        </div>
+        <!-- Botón eliminar -->
+        <button @click="eliminarTarea(index)" class="text-white hover:text-black ml-2 font-bold">✕</button>
+      </li>
+      <li v-if="tareas.length === 0" class="text-center text-gray-400 italic">No hay tareas...</li>
+    </ul>
+
+    <!-- Botón limpiar completadas -->
+    <div class="mt-4 text-center" v-if="tareas.some(t => t.completada)">
+      <button @click="limpiarCompletadas" class="text-sm text-gray-600 hover:text-red-500">Eliminar completadas</button>
+    </div>
+
+    <!-- Modal de selección de color -->
+    <div v-if="mostrarSelector" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white p-6 rounded-xl shadow-lg space-y-4 text-center">
+        <h2 class="font-semibold text-lg mb-2">Elige un color para tu tarea</h2>
+        <div class="grid grid-cols-4 gap-3">
+          <button v-for="color in colores" :key="color" @click="seleccionarColor(color)"
+            :style="{ backgroundColor: color }"
+            class="w-10 h-10 rounded-full shadow-md hover:scale-110 transition"></button>
+        </div>
+        <button @click="cancelarColor" class="mt-4 text-gray-500 hover:text-red-500">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          nuevaTarea: "",
+          tareas: JSON.parse(localStorage.getItem("tareas") || "[]"),
+          filtro: "todas",
+          mostrarSelector: false,
+          colores: ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#374151"],
+          tareaPendiente: null,
+          activo: "px-2 py-1 bg-blue-500 text-white rounded",
+          inactivo: "px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+        };
+      },
+      computed: {
+        tareasFiltradas() {
+          if (this.filtro === "activas") return this.tareas.filter(t => !t.completada);
+          if (this.filtro === "completadas") return this.tareas.filter(t => t.completada);
+          return this.tareas;
+        },
+        tareasActivas() {
+          return this.tareas.filter(t => !t.completada).length;
+        }
+      },
+      methods: {
+        abrirSelectorColor() {
+          const texto = this.nuevaTarea.trim();
+          if (texto) {
+            this.tareaPendiente = texto;
+            this.mostrarSelector = true;
+          }
+        },
+        seleccionarColor(color) {
+          this.tareas.push({ texto: this.tareaPendiente, completada: false, editando: false, color });
+          this.nuevaTarea = "";
+          this.tareaPendiente = null;
+          this.mostrarSelector = false;
+          this.guardar();
+        },
+        cancelarColor() {
+          this.tareaPendiente = null;
+          this.mostrarSelector = false;
+        },
+        eliminarTarea(index) {
+          this.tareas.splice(index, 1);
+          this.guardar();
+        },
+        editarTarea(tarea) {
+          tarea.editando = true;
+        },
+        guardarEdicion(tarea) {
+          tarea.editando = false;
+          this.guardar();
+        },
+        limpiarCompletadas() {
+          this.tareas = this.tareas.filter(t => !t.completada);
+          this.guardar();
+        },
+        guardar() {
+          localStorage.setItem("tareas", JSON.stringify(this.tareas));
+        }
+      }
+    }).mount("#app");
+  </script>
+</body>
+</html>
